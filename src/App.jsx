@@ -64,7 +64,7 @@ export default function App() {
         path="/*"
         element={
           <RequireAuth sessionKey={brand.sessionKey}>
-            <Shell brand={brand} nav={nav} user={{ name: 'Alex Morgan', role: 'Administrator' }} notifications={notifications}>
+            <Shell brand={brand} nav={nav} user={{ name: 'Alex Morgan', role: 'Administrator' }} notifications={notifications} onSearch={(q, nav) => nav(`/inventory?q=${encodeURIComponent(q)}`)}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/sales/orders" element={<SalesOrders />} />

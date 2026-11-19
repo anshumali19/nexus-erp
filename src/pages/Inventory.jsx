@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Pencil, Trash2, SlidersHorizontal, Package, AlertTriangle, DollarSign, Layers } from 'lucide-react';
 import { useDB } from '../kit/db';
 import { PageHeader, Button, DataTable, FormModal, Badge, StatCard, Progress, useToast } from '../kit/ui';
@@ -21,6 +22,7 @@ export default function Inventory() {
   const toast = useToast();
   const [edit, setEdit] = useState(null);
   const [adjust, setAdjust] = useState(null);
+  const [params] = useSearchParams();
 
   const value = db.products.reduce((s, p) => s + p.stock * p.cost, 0);
   const retail = db.products.reduce((s, p) => s + p.stock * p.price, 0);
@@ -38,6 +40,7 @@ export default function Inventory() {
       </div>
       <DataTable
         rows={db.products.map((p) => ({ ...p, margin: p.price ? ((p.price - p.cost) / p.price) * 100 : 0, health: p.stock === 0 ? 'Out of stock' : p.stock <= p.reorder ? 'Low' : 'In stock' }))}
+        initialQuery={params.get('q') || undefined}
         exportName="inventory"
         searchKeys={['name', 'sku', 'category', 'warehouse']}
         filter={{ key: 'health', options: ['In stock', 'Low', 'Out of stock'] }}

@@ -1,199 +1,200 @@
-import { useState, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Bell, RotateCcw, LogOut, Search, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, X, Bell, RotateCcw, LogOut, Search, ChevronDown, HelpCircle, Grid3x3, Building2 } from 'lucide-react';
 import { Avatar, cx, useToast } from './ui';
 import { useDB } from './db';
 
 /**
- * App shell: responsive sidebar + topbar.
- * nav: [{ section?: 'Label' } | { to, label, icon, badge? }]
+ * Nexus ERP shell: enterprise-style top application bar + module menu bar.
+ * nav: [{ to, label, icon } | { section: 'Label' }] — items after a section become that module's dropdown.
  */
+function groupNav(nav) {
+  const groups = [];
+  let cur = null;
+  nav.forEach((n) => {
+    if (n.section) { cur = { label: n.section, items: [] }; groups.push(cur); }
+    else if (cur) cur.items.push(n);
+    else groups.push({ single: n });
+  });
+  return groups;
+}
+
+function useOutside(ref, fn) {
+  useEffect(() => {
+    const h = (e) => ref.current && !ref.current.contains(e.target) && fn();
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [ref, fn]);
+}
+
 export function Shell({ brand, nav, user, children, notifications = [], onSearch }) {
-  const [open, setOpen] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const [menu, setMenu] = useState(null);
   const [bell, setBell] = useState(false);
+  const [userMenu, setUserMenu] = useState(false);
   const loc = useLocation();
   const navigate = useNavigate();
   const { reset } = useDB();
   const toast = useToast();
-  useEffect(() => { setOpen(false); setBell(false); }, [loc.pathname]);
+  const barRef = useRef();
+  const topRef = useRef();
+  useOutside(barRef, () => setMenu(null));
+  useOutside(topRef, () => { setBell(false); setUserMenu(false); });
+  useEffect(() => { setDrawer(false); setMenu(null); setBell(false); setUserMenu(false); }, [loc.pathname]);
 
+  const groups = groupNav(nav);
   const Logo = brand.icon;
-  const sidebar = (
-    <div className="flex h-full flex-col bg-slate-950 text-slate-300">
-      <div className="flex h-16 items-center gap-3 px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white shadow-lg shadow-brand-600/30">
-          <Logo size={18} />
-        </div>
-        <div className="leading-tight">
-          <div className="text-sm font-semibold text-white">{brand.name}</div>
-          <div className="text-[11px] text-slate-500">{brand.tagline}</div>
-        </div>
-      </div>
-      <nav className="flex-1 overflow-y-auto px-3 pb-4">
-        {nav.map((n, i) =>
-          n.section ? (
-            <div key={i} className="mt-5 mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{n.section}</div>
-          ) : (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.to === '/' || n.to === brand.base}
-              className={({ isActive }) =>
-                cx('group mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition', isActive ? 'bg-brand-600 text-white shadow-md shadow-brand-900/40' : 'hover:bg-white/5 hover:text-white')
-              }
-            >
-              <n.icon size={17} className="shrink-0" />
-              <span className="flex-1">{n.label}</span>
-              {n.badge ? <span className="rounded-full bg-white/10 px-2 text-[10px] font-semibold">{n.badge}</span> : null}
-            </NavLink>
-          )
-        )}
-      </nav>
-      <div className="border-t border-white/5 p-3">
-        <button
-          onClick={() => { if (confirm('Reset all demo data to the original sample set?')) { reset(); toast('Demo data restored'); } }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-white/5 hover:text-white cursor-pointer"
-        >
-          <RotateCcw size={16} /> Reset demo data
-        </button>
-        <button
-          onClick={() => { sessionStorage.removeItem(brand.sessionKey); navigate(`${brand.base || ''}/login`); }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-white/5 hover:text-white cursor-pointer"
-        >
-          <LogOut size={16} /> Sign out
-        </button>
-      </div>
-    </div>
-  );
+  const inGroup = (g) => g.items?.some((i) => loc.pathname.startsWith(i.to));
+  const signOut = () => { sessionStorage.removeItem(brand.sessionKey); navigate(`${brand.base || ''}/login`); };
+  const doReset = () => { if (confirm('Reset all demo data to the original sample set?')) { reset(); toast('Demo data restored'); } };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">{sidebar}</aside>
-      {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setOpen(false)} />
-          <div className="absolute inset-y-0 left-0 w-64 animate-slide-left">{sidebar}</div>
-          <button onClick={() => setOpen(false)} className="absolute left-66 top-4 rounded-lg bg-white p-1.5 cursor-pointer" aria-label="Close menu"><X size={18} /></button>
-        </div>
-      )}
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/85 px-4 backdrop-blur sm:px-6">
-          <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden cursor-pointer" onClick={() => setOpen(true)} aria-label="Open menu">
-            <Menu size={20} />
-          </button>
-          <div className="relative hidden max-w-md flex-1 md:block">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+    <div className="min-h-screen bg-slate-100">
+      {/* Application bar */}
+      <header ref={topRef} className="sticky top-0 z-30 bg-brand-950 text-white">
+        <div className="flex h-12 items-center gap-3 px-3 sm:px-5">
+          <button className="rounded p-1.5 hover:bg-white/10 lg:hidden cursor-pointer" onClick={() => setDrawer(true)} aria-label="Open menu"><Menu size={18} /></button>
+          <Link to="/" className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded bg-brand-500"><Logo size={15} /></span>
+            <span className="text-sm font-semibold tracking-wide">{brand.name}</span>
+          </Link>
+          <span className="hidden h-5 w-px bg-white/20 md:block" />
+          <span className="hidden items-center gap-1.5 text-xs text-white/70 md:flex"><Building2 size={13} /> {brand.tagline}</span>
+          <div className="relative mx-auto hidden w-full max-w-md md:block">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
-              placeholder={onSearch ? 'Search… (press Enter)' : 'Search…'}
+              placeholder="Search products by name or SKU…"
               onKeyDown={(e) => e.key === 'Enter' && onSearch?.(e.currentTarget.value, navigate)}
-              className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/20"
+              className="h-8 w-full rounded bg-white/10 pl-9 pr-3 text-xs text-white placeholder:text-white/40 outline-none focus:bg-white/15"
             />
           </div>
-          <div className="flex-1 md:hidden" />
-          <span className="hidden items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 sm:inline-flex">
-            <Sparkles size={13} /> Live demo
-          </span>
-          <div className="relative">
-            <button onClick={() => setBell((b) => !b)} className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 cursor-pointer" aria-label="Notifications">
-              <Bell size={19} />
-              {notifications.length > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white" />}
-            </button>
-            {bell && (
-              <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-2 shadow-xl animate-pop">
-                <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Notifications</div>
-                {notifications.length === 0 && <div className="px-3 py-6 text-center text-sm text-slate-500">You're all caught up 🎉</div>}
-                {notifications.slice(0, 6).map((n, i) => (
-                  <button key={i} onClick={() => n.to && navigate(n.to)} className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50 cursor-pointer">
-                    <span className={cx('mt-1.5 h-2 w-2 shrink-0 rounded-full', n.tone === 'red' ? 'bg-rose-500' : n.tone === 'yellow' ? 'bg-amber-500' : 'bg-brand-500')} />
-                    <span>
-                      <span className="block text-sm text-slate-800">{n.title}</span>
-                      {n.text && <span className="block text-xs text-slate-500">{n.text}</span>}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2.5 border-l border-slate-200 pl-3">
-            <Avatar name={user.name} size={34} />
-            <div className="hidden leading-tight sm:block">
-              <div className="text-sm font-medium text-slate-900">{user.name}</div>
-              <div className="text-xs text-slate-500">{user.role}</div>
+          <div className="ml-auto flex items-center gap-1 md:ml-0">
+            <span className="mr-1 hidden rounded bg-amber-400/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-950 sm:inline">Demo</span>
+            <button className="rounded p-1.5 text-white/70 hover:bg-white/10 hover:text-white cursor-pointer" aria-label="Help" onClick={() => toast('Tip: modules share data — ship an order and watch inventory update')}><HelpCircle size={17} /></button>
+            <div className="relative">
+              <button onClick={() => { setBell((b) => !b); setUserMenu(false); }} className="relative rounded p-1.5 text-white/70 hover:bg-white/10 hover:text-white cursor-pointer" aria-label="Notifications">
+                <Bell size={17} />
+                {notifications.length > 0 && <span className="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[9px] font-bold">{notifications.length}</span>}
+              </button>
+              {bell && (
+                <div className="absolute right-0 mt-2 w-80 rounded border border-slate-200 bg-white py-1 text-slate-800 shadow-xl animate-pop">
+                  <div className="border-b border-slate-100 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Alerts</div>
+                  {notifications.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-500">No alerts</div>}
+                  {notifications.slice(0, 7).map((n, i) => (
+                    <button key={i} onClick={() => n.to && navigate(n.to)} className="flex w-full items-start gap-3 px-4 py-2 text-left hover:bg-slate-50 cursor-pointer">
+                      <span className={cx('mt-1 h-2 w-2 shrink-0 rounded-sm', n.tone === 'red' ? 'bg-rose-500' : n.tone === 'yellow' ? 'bg-amber-500' : 'bg-brand-500')} />
+                      <span><span className="block text-[13px]">{n.title}</span>{n.text && <span className="block text-xs text-slate-500">{n.text}</span>}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button onClick={() => { setUserMenu((u) => !u); setBell(false); }} className="ml-1 flex items-center gap-2 rounded py-1 pl-1 pr-2 hover:bg-white/10 cursor-pointer">
+                <Avatar name={user.name} size={26} />
+                <span className="hidden text-xs sm:block">{user.name}</span>
+                <ChevronDown size={13} className="hidden text-white/60 sm:block" />
+              </button>
+              {userMenu && (
+                <div className="absolute right-0 mt-2 w-56 rounded border border-slate-200 bg-white py-1 text-sm text-slate-700 shadow-xl animate-pop">
+                  <div className="border-b border-slate-100 px-4 py-2"><div className="font-medium text-slate-900">{user.name}</div><div className="text-xs text-slate-500">{user.role}</div></div>
+                  <button onClick={doReset} className="flex w-full items-center gap-2 px-4 py-2 hover:bg-slate-50 cursor-pointer"><RotateCcw size={14} /> Reset demo data</button>
+                  <button onClick={signOut} className="flex w-full items-center gap-2 px-4 py-2 hover:bg-slate-50 cursor-pointer"><LogOut size={14} /> Sign out</button>
+                </div>
+              )}
             </div>
           </div>
-        </header>
-        <main className="mx-auto max-w-[1400px] p-4 sm:p-6 lg:p-8">{children}</main>
-      </div>
+        </div>
+        {/* Module menu bar */}
+        <nav ref={barRef} className="hidden h-11 items-stretch gap-0.5 border-b border-slate-200 bg-white px-3 text-slate-700 shadow-sm lg:flex">
+          <span className="mr-2 flex items-center pl-2 text-slate-400"><Grid3x3 size={16} /></span>
+          {groups.map((g, gi) =>
+            g.single ? (
+              <NavLink key={g.single.to} to={g.single.to} end className={({ isActive }) => cx('flex items-center gap-2 border-b-2 px-3.5 text-[13px] font-medium', isActive ? 'border-brand-600 text-brand-700' : 'border-transparent hover:text-slate-950')}>
+                <g.single.icon size={15} /> {g.single.label}
+              </NavLink>
+            ) : (
+              <div key={gi} className="relative flex">
+                <button onClick={() => setMenu(menu === gi ? null : gi)} className={cx('flex items-center gap-1.5 border-b-2 px-3.5 text-[13px] font-medium cursor-pointer', inGroup(g) ? 'border-brand-600 text-brand-700' : 'border-transparent hover:text-slate-950')}>
+                  {g.label} <ChevronDown size={13} className={cx('transition', menu === gi && 'rotate-180')} />
+                </button>
+                {menu === gi && (
+                  <div className="absolute left-0 top-full z-40 mt-px w-60 rounded-b border border-t-0 border-slate-200 bg-white py-1.5 shadow-xl animate-pop">
+                    {g.items.map((n) => (
+                      <NavLink key={n.to} to={n.to} className={({ isActive }) => cx('flex items-center gap-3 px-4 py-2 text-[13px]', isActive ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-700 hover:bg-slate-50')}>
+                        <n.icon size={15} className="text-slate-400" />
+                        <span className="flex-1">{n.label}</span>
+                        {n.badge ? <span className="rounded bg-slate-100 px-1.5 text-[10px] font-semibold text-slate-600">{n.badge}</span> : null}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          )}
+        </nav>
+      </header>
+
+      {drawer && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setDrawer(false)} />
+          <div className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-white animate-slide-left">
+            <div className="flex h-12 items-center justify-between bg-brand-950 px-4 text-white"><span className="text-sm font-semibold">{brand.name}</span><button onClick={() => setDrawer(false)} aria-label="Close menu" className="cursor-pointer"><X size={18} /></button></div>
+            {groups.map((g, gi) => (
+              <div key={gi} className="border-b border-slate-100 py-2">
+                {g.label && <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{g.label}</div>}
+                {(g.single ? [g.single] : g.items).map((n) => (
+                  <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => cx('flex items-center gap-3 px-4 py-2 text-sm', isActive ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-700')}>
+                    <n.icon size={16} /> {n.label}
+                  </NavLink>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <main className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:py-6">{children}</main>
+      <footer className="border-t border-slate-200 bg-white px-6 py-2.5 text-[11px] text-slate-400">{brand.name} · {brand.tagline} · Demo environment — data is stored in your browser</footer>
     </div>
   );
 }
 
-/** Demo sign-in screen; any input works, it only sets a session flag. */
+/** Centered enterprise sign-in card. */
 export function Login({ brand, highlights = [], demoEmail }) {
   const navigate = useNavigate();
   const [email, setEmail] = useState(demoEmail);
   const [pw, setPw] = useState('demo1234');
   const Logo = brand.icon;
-  const go = (e) => {
-    e?.preventDefault();
-    sessionStorage.setItem(brand.sessionKey, '1');
-    navigate(brand.base || '/');
-  };
+  const go = (e) => { e?.preventDefault(); sessionStorage.setItem(brand.sessionKey, '1'); navigate(brand.base || '/'); };
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="relative hidden overflow-hidden bg-slate-950 p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-brand-600/40 blur-3xl" />
-        <div className="absolute -bottom-40 -left-20 h-96 w-96 rounded-full bg-brand-400/20 blur-3xl" />
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600"><Logo size={20} /></div>
-          <span className="text-lg font-semibold">{brand.name}</span>
+    <div className="relative min-h-screen overflow-hidden bg-slate-100">
+      <div className="absolute inset-x-0 top-0 h-[46vh] bg-brand-950" />
+      <div className="absolute inset-x-0 top-0 h-[46vh] opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+      <div className="relative mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-4 py-10">
+        <div className="mb-8 flex items-center gap-3 text-white">
+          <span className="flex h-10 w-10 items-center justify-center rounded bg-brand-500"><Logo size={20} /></span>
+          <div><div className="text-lg font-semibold">{brand.name}</div><div className="text-xs text-white/60">Enterprise Resource Planning</div></div>
         </div>
-        <div className="relative">
-          <h2 className="max-w-md text-4xl font-semibold leading-tight tracking-tight">{brand.headline}</h2>
-          <p className="mt-4 max-w-md text-slate-400">{brand.description}</p>
-          <ul className="mt-8 space-y-3">
-            {highlights.map((h) => (
-              <li key={h} className="flex items-center gap-3 text-sm text-slate-300">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600/30 text-brand-300">✓</span>
-                {h}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} {brand.name}. Demo environment.</p>
-      </div>
-      <div className="flex items-center justify-center bg-white p-6">
-        <form onSubmit={go} className="w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white"><Logo size={20} /></div>
-            <span className="text-lg font-semibold">{brand.name}</span>
+        <form onSubmit={go} className="w-full max-w-md rounded border border-slate-200 bg-white p-8 shadow-2xl">
+          <h1 className="text-lg font-semibold text-slate-900">Sign in to your workspace</h1>
+          <p className="mt-1 text-xs text-slate-500">{brand.tagline}</p>
+          <div className="mt-6 space-y-4">
+            <label className="block"><span className="mb-1 block text-xs font-medium text-slate-600">Work email</span><input value={email} onChange={(e) => setEmail(e.target.value)} className="h-10 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/15" /></label>
+            <label className="block"><span className="mb-1 block text-xs font-medium text-slate-600">Password</span><input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className="h-10 w-full rounded border border-slate-300 px-3 text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/15" /></label>
+            <button className="h-10 w-full rounded bg-brand-700 text-sm font-semibold text-white hover:bg-brand-800 cursor-pointer">Sign in</button>
+            <button type="button" onClick={go} className="h-10 w-full rounded border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">Continue as demo administrator</button>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Welcome back</h1>
-          <p className="mt-1 text-sm text-slate-500">Sign in to explore the live demo workspace.</p>
-          <div className="mt-8 space-y-4">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-slate-700">Email</span>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-slate-700">Password</span>
-              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
-            </label>
-            <button className="h-10 w-full rounded-lg bg-brand-600 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 cursor-pointer">Sign in</button>
-            <button type="button" onClick={go} className="h-10 w-full rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
-              Continue as demo user →
-            </button>
-          </div>
-          <p className="mt-6 rounded-lg bg-brand-50 p-3 text-xs text-brand-800">
-            This is a demo. Data is stored only in your browser, so feel free to create, edit and delete anything. Use “Reset demo data” in the sidebar to start over.
-          </p>
+          <p className="mt-6 border-t border-slate-100 pt-4 text-[11px] leading-relaxed text-slate-500">Demo environment. Data is stored only in your browser — create, edit and delete freely. Use “Reset demo data” in the user menu to start over.</p>
         </form>
+        <div className="mt-8 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
+          {highlights.map((h) => <div key={h} className="rounded border border-slate-200 bg-white px-3 py-2.5 text-center text-[11px] text-slate-600 shadow-sm">{h}</div>)}
+        </div>
       </div>
     </div>
   );
 }
 
-/** Route guard */
 export function RequireAuth({ sessionKey, base = '', children }) {
   const navigate = useNavigate();
   const ok = sessionStorage.getItem(sessionKey);
